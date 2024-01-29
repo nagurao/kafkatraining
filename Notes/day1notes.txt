@@ -1,0 +1,262 @@
+Messaging is meant for asynchronous communication.
+
+
+Sender----------->MOM--------->Receiver.
+
+MOM--------Message Oriented Middleware.
+Also called Messaging Server.
+
+
+Two types of messaging:
+
+1. Point to Point-----------1 to 1
+2. Publish & Subscribe------1 to many
+
+
+
+Point to Point
+
+Sender---------->Queue----------->Receiver
+
+
+Publish & Subscribe
+
+			     |------->Receiver 1	
+Sender----------->Topic------|------->Receiver 2
+			     |------->Receiver 3
+
+Queue and Topic are collectively called messaging destinations.
+
+
+Examples of MOM:
+
+Apache Active MQ
+Rabbit MQ
+IBM MQ	
+Tibco Rendezvous
+Kafka
+Pulsar
+
+Kafka is a open source MOM developed using Java and Scala.
+
+Kafka supports distributed messaging.
+
+A topic is distributed across multiple nodes in the cluster.
+
+In kafka, a topic is divided into multiple partitions.
+Each partition can hold a set of messages.
+These partitions are spread across multiple nodes in the cluster.
+
+Each kafka node is called a broker.
+
+Each partition can be replicated across multiple brokers to support fault tolerance.
+
+The number of copies of the partition is decided based on the replication factor of the topic.
+
+
+Example:
+
+Assume that there are 5 brokers in the cluster and a topic is created with 4 partitions.
+Partitions are numbered from 0.
+
+ie if there are 4 partitions, they are numbered as 0,1,2 and 3.
+
+Assume that the replication factor of the topic is 3.
+
+ie each partition will be replicated in 3 brokers.
+
+A sample distribution of the partitions can be as shown below.
+
+broker-1-------0,1
+
+broker-2-------2,3,0
+
+broker-3-------1,2
+
+broker-4-------3,0,1
+
+broker-5-------2,3
+
+ Kafka guarantees that the same partition will not be replicated in the same broker.
+
+The replication factor is decided at the topic level and not at the partition level.
+
+Message is the fundamental unit of data in kafka.
+Each message is called a log.
+
+Once a mesage is consumed by a consumer group, it is committed.
+
+A committed message will not be redelivered to the same consumer group.
+
+
+Data Ingest--------Importing data from external sources into kafka topic and exporting data from kafka topic
+to external sources.
+
+External sources include RDBMS, No Sql DBs, Local File System, HDFS, Elastic Search  and etc.
+
+Example of a simple ETL pipeline that can be built with kafka
+
+
+	Extract				Transform			   Load
+RDBMS---------->Kafka Topic 1-------->Streaming App--------->Kafka Topic 2-------->No Sql
+
+
+Each kafka message has 2 parts.
+
+1. key-------------all the messages with the same key go to the same partition.
+2. value-----------payload
+
+key is optional.
+
+Kafka Setup & verification:
+
+1. Download java 8 from https://www.oracle.com/java/technologies/javase/javase8-archive-downloads.html#license-lightbox and install it.
+
+2. set the JAVA_HOME environment variable.
+
+3. Download kafka 2.5.0 from https://archive.apache.org/dist/kafka/2.5.0/kafka_2.12-2.5.0.tgz and extract it to 
+c:\.
+
+4 sub directories under Kafka.
+
+bin-----------contains the binary scripts for unix flavours.
+bin\windows---contains the binary scripts for windows.
+
+libs----------kafka libraries in the form of jar files
+config--------configuration files in the format of .properties.
+site-docs-----documentation
+
+4. set the KAFKA_HOME environment variable.
+
+5. Add %JAVA_HOME%\bin and %KAFKA_HOME%\bin\windows to the path.
+
+6. Start the zookeeper.
+
+Zookeeper is a service used by kafka to store its meta data like how many partitions in the topic, the consumer
+group details, offset information and etc.
+
+open a new command window and run the following command.
+
+zookeeper-server-start c:\kafka_2.12-2.5.0\config\zookeeper.properties
+
+zookeeper by default, runs at port 2181.
+
+7. Start the kafka server.
+open a new command window and run the following command.
+kafka-server-start c:\kafka_2.12-2.5.0\config\server.properties
+
+kafka server by default, runs at port 9092
+
+8. create a kafka topic.
+open a new command window and run the following command.
+
+kafka-topics --create --topic first-topic --partitions 4 --replication-factor 1 --zookeeper localhost:2181
+
+9. start a kafka console producer to send a message to the topic from the same command window used in 
+step 8.
+
+kafka-console-producer --topic first-topic --bootstrap-server localhost:9092
+
+10. start a kafka console consumer 
+
+start a kafka console consumer to consume messages from the topic.
+
+open a new command window and run the following command.
+
+kafka-console-consumer --topic first-topic --bootstrap-server localhost:9092
+
+			    byte[]
+sender--------------------->Kafka Topic----------------->Receiver
+	serializer			 deserializer
+        (object--->byte[])		 (byte[]---->object)
+
+For fundamental classes like String,Integer and etc, kafka api provides inbuilt serializers and deserializers.
+
+
+Consumer group ensures that a message received by one consumer of the group is not consumed by another 
+consumer of the same group.
+
+The partitions of a topic are equally divided among the consumers of a single consumer group.
+A partition can't be shared by multiple consumers of the same group.
+
+
+If there are 4 partitions in the topic and 1 consumer of a consumer group is running , all the 4 partitions
+will be consumed by this single consumer.
+
+If there are 4 partitions in the topic and 2 consumers of a consumer group are running , 2 partitions
+will be assigned to each consumer.
+
+
+If there are 4 partitions in the topic and 3 consumers of a consumer group are running , 1 partition
+each will be assigned to 2 consumers and 2 partitions will be assigned to the third consumer.
+
+If there are 4 partitions in the topic and 4 consumers of a consumer group are running , 1 partition
+will be assigned to each consumer.
+
+If there are 4 partitions in the topic and 5 consumers of a consumer group are running , 1 partition
+will be assigned to each consumer and the fifth consumer will be idle.
+
+
+
+Default partitioning logic:
+
+the partition to which a message goes=hashcode_of_the_key % no_of_partitions
+
+If the number of partitions are 4, the legal values  the expression hashcode_of_the_key % no_of_partitions may generate is 0 to 3.
+
+
+Custom Partitioner:
+
+The custom partitioner should implement an interface called Partitioner which has 3 methods.
+
+1. configure()-------initialization logic like open a file,dbconnection and etc---invoked only once
+2. partition()-------partitioning logic-------------------------------------------invoked for each message
+3. close()-----------clean up logic like closing a file,dbconnection and etc------invoked only once
+
+key		partition
+first-key	 0
+second-key	 1
+third-key	 2
+any other key    3
+
+
+The user defined serializer should be implement an interface called Serializer which contains a method 
+called serialize().
+
+Common logic used in the serializer:
+
+The object is converted to json format and then to byte[].
+
+The domain class is the class whose objects are going to be serialized to byte[] format.
+
+The domain class should be json parser compliant.
+A json parser compliant class should
+
+1. be a public class.
+2. contain getter/setter methods for the data members.
+3. contain a no argument constructor.
+
+
+Examples of json parsers:
+
+Jackson
+Moxy
+Jettison
+
+
+Jackson is a very popular json parser.
+
+
+
+The default deserializer used by kafka-console-consumer is StringDeserializer.
+
+We need to create a user defined deserializer to consume the data in Employee object format.
+
+
+User defined Deserializer should implement an interface called Deserializer which contains a method
+deserialize().
+
+
+
+
+
