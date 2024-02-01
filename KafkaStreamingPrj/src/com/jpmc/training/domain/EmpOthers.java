@@ -1,12 +1,10 @@
 package com.jpmc.training.domain;
 
-public class Employee {
+public class EmpOthers {
 
 	private int id;
 	private String name;
 	private String designation;
-	private double salary;
-	
 	public int getId() {
 		return id;
 	}
@@ -25,27 +23,18 @@ public class Employee {
 	public void setDesignation(String designation) {
 		this.designation = designation;
 	}
-    public Employee(int id, String name, String designation) {
-        super();
-        this.id = id;
-        this.name = name;
-        this.designation = designation;
-    }
-    public Employee() {
-        super();
-        // TODO Auto-generated constructor stub
-    }
-    public double getSalary() {
-        return salary;
-    }
-    public void setSalary(double salary) {
-        this.salary = salary;
-    }
-	public Employee(int id, String name) {
+	public EmpOthers(int id, String name, String designation) {
 		super();
 		this.id = id;
 		this.name = name;
+		this.designation = designation;
 	}
+	public EmpOthers() {
+		super();
+		// TODO Auto-generated constructor stub
+	}
+
+	
     
     
 }
