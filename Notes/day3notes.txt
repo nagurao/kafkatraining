@@ -1,0 +1,524 @@
+The Callback interface is implemented by the sender to receive acknowledgements from the kafka
+regarding the partition and offset to where the message is published.
+
+The Callback interface contains a method called onCompletion which is invoked automatically once
+the acknowledgement is received from the server.
+
+Kafka Connect:
+
+Kafka connect is a process of importing data from datasources into kafka topic and exporting data from
+kafka topic to datasources.
+
+The datasouces include local file system,HDFS,RDBMS,no sql dbs,elastic search and etc.
+
+	    Source Connector		Sink Connector
+DataSource--------------->Kafka Topic------------------>DataSource
+(Source)						(Sink)
+
+
+Connectors are readymade components to facilitate connect process.
+
+Two types of connectors:
+
+1. Source Connector---------used to import from datasource to kafka topic
+2. Sink Connector-----------used to export from kafka topic to data source
+
+Connectors are provided by Apache Kafka or third party vendors.
+Connectors are developed using kafka connect api.
+We also develop user defined connectors.
+
+
+File---------------->Kafka Topic
+
+steps:
+
+1. create a copy of %KAFKA_HOME%\config\connect-file-source.properties and rename it as my-connect-file-source.properties.
+
+2. Ensure that the content of %KAFKA_HOME%\config\my-connect-file-source.properties is as shown below.
+
+name=local-file-source-test
+connector.class=FileStreamSource
+#number of parallel threads
+tasks.max=1
+file=c:/input/test.txt
+topic=test-topic
+
+3. create the file c:\input\test.txt and add some content to it.
+
+4. start the connect process using the following command.
+
+connect-standalone c:\kafka_2.12-2.5.0\config\connect-standalone.properties c:\kafka_2.12-2.5.0\config\my-connect-file-source.properties
+
+5. check whether the connect process is working by consuming from the test-topic.
+
+kafka-console-consumer --topic test-topic --bootstrap-server localhost:9092 --from-beginning
+
+	FileStreamSource	FileStreamSink
+File---------------->Kafka Topic--------------->File
+c:\input\test.txt	test-topic	   c:\output\test-out.txt
+
+	
+1. create a copy of %KAFKA_HOME%\config\connect-file-source.properties and rename it as my-connect-file-source.properties.
+
+2. Ensure that the content of %KAFKA_HOME%\config\my-connect-file-source.properties is as shown below.
+
+name=local-file-source-test
+connector.class=FileStreamSource
+#number of parallel threads
+tasks.max=1
+file=c:/input/test.txt
+topic=test-topic
+
+3. create the file c:\input\test.txt and add some content to it.
+
+4. create a copy of %KAFKA_HOME%\config\connect-file-sink.properties and rename it as my-connect-file-sink.properties.
+
+name=local-file-sink-test
+connector.class=FileStreamSink
+tasks.max=1
+file=c:/output/test-out.txt
+topics=test-topic
+
+5. create c:\output directory
+
+6. start the connect process using the following command.
+
+
+connect-standalone c:\kafka_2.12-2.5.0\config\connect-standalone.properties c:\kafka_2.12-2.5.0\config\my-connect-file-source.properties c:\kafka_2.12-2.5.0\config\my-connect-file-sink.properties
+
+7. As new lines are added, they are appended to the file c:/output/test-out.txt.
+
+
+
+
+
+
+In the connect-standalone.properties, modify the following properties to disable schema being published.
+
+key.converter.schemas.enable=false
+value.converter.schemas.enable=false
+
+
+c:/input/test.txt     file-src-topic				  	                    c:/output/upper.txt
+File------------------------>Kafka Topic-1------->Streaming App------->Kafka Topic-2--------------->File
+ 	src-connector	file-etl-src-topic	convert to uppercase	file-etl-sink-topic sink-connector
+	(Extract)					(Transform)			  (Load)
+
+
+Kafka Streaming:
+
+Kafka Streaming Application picks up new data published to a kafka topic, transforms it and publishes the
+transformed data to another topic.
+
+It uses a special api called kafka-streams api.
+
+Streaming app acts as a consumer and producer.
+
+Streaming app needs a deserializer for consuming and serializer for publishing.
+
+Serde--------Serializer and Deserializer--------combination of Serializer and Deserializer.
+
+Toplogy:
+
+Kafka Topic-1--------->Streaming App--------->Kafka Topic-2 
+
+Topology includes the input topic, transformation logic and the output topics.
+
+1. create a copy of %KAFKA_HOME%\config\connect-file-source.properties and rename it as my-connect-file-etl-source.properties.
+
+2. Ensure that the content of %KAFKA_HOME%\config\my-connect-file-source-etl.properties is as shown below.
+
+name=file-src-etl
+connector.class=FileStreamSource
+#number of parallel threads
+tasks.max=1
+file=c:/input/test.txt
+topic=file-etl-src-topic
+
+3. create the file c:\input\test.txt and add some content to it.
+
+4. create the streaming app.
+
+package com.jpmc.training.streams;
+
+import java.util.Properties;
+
+import org.apache.kafka.common.serialization.Serdes.StringSerde;
+import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.kstream.KStream;
+
+public class FileETLStreamingApp {
+    public static void main(String[] args) {
+        Properties props=new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "file-etl-streaming-app");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, StringSerde.class.getName());
+        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, StringSerde.class.getName());
+        KafkaStreams streams=new KafkaStreams(createTopology(), props);
+        streams.start();
+        System.out.println("streaming started");
+        try {
+            Thread.sleep(10*60*1000);
+        } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        streams.close();
+        System.out.println("streaming stopped");
+    }
+
+    
+    static Topology createTopology() {
+        String inputTopic="file-etl-src-topic";
+        String outputTopic="file-etl-sink-topic";
+        StreamsBuilder builder=new StreamsBuilder();
+        KStream<String, String> inputStream=builder.stream(inputTopic);
+        KStream<String, String> transformedStream= inputStream.mapValues(line->{
+            System.out.println("processing "+line);
+            return line.toUpperCase();
+        });
+        transformedStream.to(outputTopic);
+        return builder.build();
+    }
+}
+
+
+5. create a copy connect-file-sink.properties and rename it as my-connect-file-sink-etl.properties.
+
+6. Ensure that the content of my-connect-file-sink-etl.properties is as shown below.
+
+name=file-sink-etl
+connector.class=FileStreamSink
+tasks.max=1
+file=c:/output/upper.txt
+topics=file-etl-sink-topic
+
+7.Stop any connect process if it is running and start it using the following command.
+
+connect-standalone c:\kafka_2.12-2.5.0\config\connect-standalone.properties c:\kafka_2.12-2.5.0\config\my-connect-file-source-etl.properties c:\kafka_2.12-2.5.0\config\my-connect-file-sink-etl.properties
+
+8. Run the streaming app.
+
+
+	Extract				Transform			   Load
+RDBMS---------->Kafka Topic 1-------->Streaming App--------->Kafka Topic 2-------->No Sql
+(mysql)		mysql-topic-employee			cassandra-topic-employee  (cassandra)
+
+employee table				calculate salary			emp table
+id										   emp_id
+name										   emp_name	
+designation									   designation
+										   salary
+		
+
+
+Apache kafka does not provide connectors for RDBMS and No sql dbs.
+
+For this etl pipeline, we shall use third party kafka connectors. Some popular vendors are confluent,lenses-io
+and etc.
+
+For rdbms, we shall use confluent's connector.
+For cassandra, we shall use lenses-io's cassandra connector.
+
+1. create the employee table in mysql and insert some rows.
+
+mysql> create database trainingdb;
+Query OK, 1 row affected (0.create database trainingdb;
+Query OK, 1 row affected (0.00 sec)
+
+mysql> use trainingdb;
+Database changed
+
+
+mysql> create table employee(id integer auto_increment,name varchar(20),designation varchar(20),primary key(id));
+Query OK, 0 rows affected (0.02 sec)
+
+mysql> insert into employee values(1001,"Arvind","Developer");
+Query OK, 1 row affected (0.00 sec)
+
+mysql> insert into employee(name,designation) values("Surya","Accountant");
+Query OK, 1 row affected (0.00 sec)
+
+mysql> insert into employee(name,designation) values("Ramesh","Architect");
+Query OK, 1 row affected (0.00 sec)
+
+mysql> select * from employee;
+
+
+2. Download confluent's jdbc connector from https://www.confluent.io/hub/confluentinc/kafka-connect-jdbc
+and extract it.
+
+3. From the extracted directory, copy lib\kafka-connect-jdbc-version.jar to %KAFKA_HOME%\libs directory.
+
+4. Download mysql jdbc driver from https://downloads.mysql.com/archives/get/p/3/file/mysql-connector-java-5.1.39.tar.gz and extract it.
+
+5. From the extracted directory, copy the mysql-connector-java-5.1.39-bin.jar to %KAFKA_HOME%\libs
+directory.
+
+6. Within the %KAFKA_HOME%\config, create a file called connect-mysql-source-etl.properties 
+and add the following content.
+
+
+name=mysql-source-connector-etl
+connector.class=io.confluent.connect.jdbc.JdbcSourceConnector
+tasks.max=10
+connection.url=jdbc:mysql://localhost:3306/trainingdb?user=root&password=rps@12345
+table.whitelist=employee
+mode=incrementing
+incrementing.column.name=id
+#topic name will be mysql-topic-employee
+topic.prefix=mysql-topic-
+
+
+7. create the domain class
+
+package com.jpmc.training.domain;
+
+public class Employee {
+    private int id;
+    private String name;
+    private String designation;
+    private double salary;
+    
+    public int getId() {
+        return id;
+    }
+    public void setId(int id) {
+        this.id = id;
+    }
+    public String getName() {
+        return name;
+    }
+    public void setName(String name) {
+        this.name = name;
+    }
+    
+    
+    public String getDesignation() {
+        return designation;
+    }
+    public void setDesignation(String designation) {
+        this.designation = designation;
+    }
+    public Employee() {
+        super();
+        // TODO Auto-generated constructor stub
+    }
+    public Employee(int id, String name, String designation) {
+        super();
+        this.id = id;
+        this.name = name;
+        this.designation = designation;
+    }
+    public double getSalary() {
+        return salary;
+    }
+    public void setSalary(double salary) {
+        this.salary = salary;
+    }
+       
+    
+
+}
+
+8. create the serde.
+
+User defined serde should implement an interface called Serde which contains 2 methods namely serializer()
+and deserializer().
+
+package com.jpmc.training.serde;
+
+import org.apache.kafka.common.serialization.Serializer;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jpmc.training.domain.Employee;
+
+public class EmployeeSerializer implements Serializer<Employee>{
+    private ObjectMapper mapper=new ObjectMapper();
+    @Override
+    public byte[] serialize(String topic, Employee e) {
+        // TODO Auto-generated method stub
+        byte[] arr=null;
+        try {
+            arr=mapper.writeValueAsBytes(e);
+        } catch (JsonProcessingException e1) {
+            // TODO Auto-generated catch block
+            e1.printStackTrace();
+        }
+        System.out.println("serialized to "+new String(arr));
+        return arr;
+    }
+
+}
+
+
+package com.jpmc.training.serde;
+
+import java.io.IOException;
+
+import org.apache.kafka.common.serialization.Deserializer;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jpmc.training.domain.Employee;
+
+public class EmployeeDeserializer implements Deserializer<Employee> {
+    private ObjectMapper mapper=new ObjectMapper();
+    @Override
+    public Employee deserialize(String topic, byte[] array) {
+        // TODO Auto-generated method stub
+        Employee employee=null;
+        try {
+            employee=mapper.readValue(array, Employee.class);
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        return employee;
+    }
+
+}
+
+
+
+
+package com.jpmc.training.serde;
+
+import com.jpmc.training.domain.Employee;
+
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serializer;
+
+public class EmployeeSerde implements Serde<Employee> {
+
+    @Override
+    public Deserializer<Employee> deserializer() {
+        // TODO Auto-generated method stub
+        return new EmployeeDeserializer();
+    }
+
+    @Override
+    public Serializer<Employee> serializer() {
+        // TODO Auto-generated method stub
+        return new EmployeeSerializer();
+    }
+
+}
+
+
+
+
+
+9. create the streaming app
+
+package com.jpmc.training.streams;
+
+import java.util.Properties;
+
+import org.apache.kafka.common.serialization.Serdes.StringSerde;
+import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.kstream.KStream;
+
+import com.jpmc.training.domain.Employee;
+import com.jpmc.training.serde.EmployeeSerde;
+
+public class MysqlToCassandraETLApp {
+    public static void main(String[] args) {
+        Properties props=new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "mysql-cassandra-etl-streaming-app");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, StringSerde.class.getName());
+        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, EmployeeSerde.class.getName());
+        KafkaStreams streams=new KafkaStreams(createTopology(), props);
+        streams.start();
+        System.out.println("streaming started");
+        try {
+            Thread.sleep(10*60*1000);
+        } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        streams.close();
+        System.out.println("streaming stopped");
+    }
+
+    
+    static Topology createTopology() {
+        String inputTopic="mysql-topic-employee";
+        String outputTopic="cassandra-topic-employee";
+        StreamsBuilder builder=new StreamsBuilder();
+        KStream<String, Employee> inputStream=builder.stream(inputTopic);
+        KStream<String, Employee> transformedStream= inputStream.mapValues(emp->{
+            System.out.println("processing employee with id  "+emp.getId());
+            String designation=emp.getDesignation();
+            Employee emp1=new Employee(emp.getId(), emp.getName(), designation);
+            double salary=30000;
+            if(designation.equals("Developer")) {
+                salary=45000;
+            }
+            else if(designation.equals("Accountant")) {
+                salary=35000;
+            }
+            else if(designation.equals("Architect")) {
+                salary=70000;
+            }
+            emp1.setSalary(salary);
+            return emp1;
+        });
+        transformedStream.to(outputTopic);
+        return builder.build();
+    }
+}
+
+10. Download lenses-io's cassandra sink connector from https://github.com/lensesio/stream-reactor/releases/download/3.0.1/kafka-connect-cassandra-3.0.1-2.5.0-all.tar.gz and extract it.
+
+11. From the extracted directory, copy kafka-connect-cassandra-version.jar to %KAFKA_HOME%\libs
+directory.
+
+12. create the cassandra table.
+
+Navigate to cassandra\bin directory and start the cassandra server by running the following command.
+
+
+C:\apache-cassandra-3.11.6\bin>cassandra
+
+open another command window , navigate to cassandra\bin directory and start the cassandra client by running the following command.
+
+
+C:\apache-cassandra-3.11.6\bin>path=c:\Python27;%path%
+
+C:\apache-cassandra-3.11.6\bin>cqlsh
+
+cqlsh> create keyspace test_keyspace with replication={'class':'SimpleStrategy','replication_factor':1};
+cqlsh> use test_keyspace;
+cqlsh:test_keyspace> create table emp(emp_id int primary key,emp_name text,designation text,salary double);
+cqlsh:test_keyspace> describe tables;
+
+13. create the file  %KAFKA_HOME%\config\connect-cassandra-sink-etl.properties and add the following
+content to it.
+
+name=cassandra-sink-etl
+connector.class=com.datamountaineer.streamreactor.connect.cassandra.sink.CassandraSinkConnector
+tasks.max=1
+topics=cassandra-topic-employee
+connect.cassandra.kcql=INSERT INTO emp SELECT id as emp_id,name as emp_name,designation,salary FROM cassandra-topic-employee
+connect.cassandra.port=9042
+connect.cassandra.key.space=test_keyspace
+connect.cassandra.contact.points=localhost
+connect.cassandra.username=cassandra
+connect.cassandra.password=cassandra
+
+14. start the connect process 
+
+connect-standalone c:\kafka_2.12-2.5.0\config\connect-standalone.properties c:\kafka_2.12-2.5.0\config\connect-mysql-source-etl.properties c:\kafka_2.12-2.5.0\config\connect-cassandra-sink-etl.properties
+
+15. Run the streaming app
+
+

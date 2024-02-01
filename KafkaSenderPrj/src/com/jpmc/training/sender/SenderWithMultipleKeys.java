@@ -1,4 +1,4 @@
-package com.jpmc.training.sender;
+ package com.jpmc.training.sender;
 
 import java.util.Properties;
 

@@ -1,0 +1,588 @@
+
+https://drive.google.com/drive/folders/1DMpty0sJ8EnzcLKbsgmJI6js8GLirHOZ?usp=sharing
+
+package:     com.jpmc.training.deserializer
+class:        EmployeeDeserializer 
+
+package com.jpmc.training.deserializer;
+
+import java.io.IOException;
+
+import org.apache.kafka.common.serialization.Deserializer;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jpmc.training.domain.Employee;
+
+public class EmployeeDeserializer implements Deserializer<Employee> {
+    private ObjectMapper mapper=new ObjectMapper();
+    @Override
+    public Employee deserialize(String topic, byte[] array) {
+        // TODO Auto-generated method stub
+        Employee employee=null;
+        try {
+            employee=mapper.readValue(array, Employee.class);
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        return employee;
+    }
+
+}
+
+
+package com.jpmc.training.receiver;
+
+import java.time.Duration;
+import java.util.Collections;
+import java.util.List;
+import java.util.Properties;
+
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+
+import com.jpmc.training.deserializer.EmployeeDeserializer;
+import com.jpmc.training.domain.Employee;
+
+public class EmployeeReceiver {
+
+    public static void main(String[] args) {
+        // TODO Auto-generated method stub
+        Properties props=new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, EmployeeDeserializer.class.getName());
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "group-1");
+        
+        KafkaConsumer<String, Employee> consumer=new KafkaConsumer<>(props);
+        List<String> topicList=Collections.singletonList("emp-topic");
+        consumer.subscribe(topicList);
+        
+        System.out.println("waiting for messages");
+        
+        while(true) {
+            ConsumerRecords<String, Employee> records=consumer.poll(Duration.ofSeconds(30));
+            records.forEach(record->{
+                System.out.println("Key:"+record.key());
+                System.out.println("Value: ");
+                Employee e=record.value();
+                System.out.println("Id: "+e.getId()+"\tName:"+e.getName()+"\tDesignation: "+e.getDesignation());
+                System.out.println("Partition: "+record.partition());
+            }
+        );
+
+    }
+
+}
+}
+
+
+
+package com.jpmc.training.domain;
+
+public class Employee {
+    private int id;
+    private String name;
+    private String designation;
+    
+    public int getId() {
+        return id;
+    }
+    public void setId(int id) {
+        this.id = id;
+    }
+    public String getName() {
+        return name;
+    }
+    public void setName(String name) {
+        this.name = name;
+    }
+    
+    
+    public String getDesignation() {
+        return designation;
+    }
+    public void setDesignation(String designation) {
+        this.designation = designation;
+    }
+    public Employee() {
+        super();
+        // TODO Auto-generated constructor stub
+    }
+    public Employee(int id, String name, String designation) {
+        super();
+        this.id = id;
+        this.name = name;
+        this.designation = designation;
+    }
+    @Override
+    public String toString() {
+        return "Employee [id=" + id + ", name=" + name + ", designation=" + designation + "]";
+    }
+    
+    
+    
+
+}
+
+
+jar tvf c:\kafka_2.12-2.5.0\libs\empdeserializer.jar
+
+
+kafka-console-consumer --value-deserializer com.jpmc.training.deserializer.EmployeeDeserializer --topic emp-topic --bootstrap-server localhost:9092
+
+kafka-topics --describe --topic emp-topic --zookeeper localhost:2181
+
+kafka-topics --alter --topic emp-topic --partitions 3 --zookeeper localhost:2181
+
+designation.properties
+
+Developer=0
+Accountant=1
+
+
+
+package com.jpmc.training.partitioner;
+
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.util.Map;
+import java.util.Properties;
+
+import org.apache.kafka.clients.producer.Partitioner;
+import org.apache.kafka.common.Cluster;
+
+import com.jpmc.training.domain.Employee;
+
+public class EmployeePartitioner implements Partitioner{
+    Properties props=new Properties();
+
+    @Override
+    public void configure(Map<String, ?> arg0) {
+        // TODO Auto-generated method stub
+        try {
+            FileInputStream fin=new FileInputStream("designation.properties");
+            props.load(fin);
+            fin.close();
+        } catch ( IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        
+    }
+
+    @Override
+    public void close() {
+        // TODO Auto-generated method stub
+        props=null;
+    }
+
+    @Override
+    public int partition(String topic, Object key, byte[] keyBytes,
+            Object value, byte[] valueBytes, Cluster cluster) {
+        // TODO Auto-generated method stub
+        int partition=2;
+        Employee e=(Employee)value;
+        String designation=e.getDesignation();
+        if(props.containsKey(designation)) {
+            partition=Integer.parseInt(props.getProperty(designation));
+        }
+        System.out.println("sending employee with id "+e.getId()+" to partition "+partition );
+        return partition;
+    }
+
+}
+
+
+
+
+package com.jpmc.training.sender;
+
+import java.util.Properties;
+
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringSerializer;
+
+import com.jpmc.training.domain.Employee;
+import com.jpmc.training.partitioner.EmployeePartitioner;
+import com.jpmc.training.serializer.EmployeeSerializer;
+
+public class EmployeeSenderWithCustomPartitioner {
+public static void main(String[] args) {
+
+    Properties props=new Properties();
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,"localhost:9092");
+    props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,StringSerializer.class.getName());
+    props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,EmployeeSerializer.class.getName());
+    props.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, EmployeePartitioner.class.getName());
+    
+    String topic="emp-topic";
+    KafkaProducer<String, Employee> producer=new KafkaProducer<>(props);
+    for(int i=1001;i<=1010;i++) {
+        Employee employee=new Employee(i, "Name "+i, "Developer");
+        ProducerRecord<String, Employee> record=
+                new ProducerRecord<>(topic,employee);
+        producer.send(record);
+    }
+    for(int i=1011;i<=1020;i++) {
+        Employee employee=new Employee(i, "Name "+i, "Accountant");
+        ProducerRecord<String, Employee> record=
+                new ProducerRecord<>(topic,employee);
+        producer.send(record);
+    }
+    for(int i=1021;i<=1030;i++) {
+        Employee employee=new Employee(i, "Name "+i, "Architect");
+        ProducerRecord<String, Employee> record=
+                new ProducerRecord<>(topic,employee);
+        producer.send(record);
+    }
+    for(int i=1031;i<=1040;i++) {
+        Employee employee=new Employee(i, "Name "+i, "System Admin");
+        ProducerRecord<String, Employee> record=
+                new ProducerRecord<>(topic,employee);
+        producer.send(record);
+    }
+    producer.close();
+    System.out.println("messages sent");
+}
+}
+
+
+Project: KafkaReceiverPrj
+package: com.jpmc.training.receiver
+class: ReceiverWithOffsetInfo
+
+
+package com.jpmc.training.receiver;
+
+import java.time.Duration;
+import java.util.Collections;
+import java.util.List;
+import java.util.Properties;
+
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+
+public class ReceiverWithOffsetInfo {
+
+    public static void main(String[] args) {
+        // TODO Auto-generated method stub
+        Properties props=new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "group-1");
+        
+        KafkaConsumer<String, String> consumer=new KafkaConsumer<>(props);
+        List<String> topicList=Collections.singletonList("first-topic");
+        consumer.subscribe(topicList);
+        
+        System.out.println("waiting for messages");
+        
+        while(true) {
+            ConsumerRecords<String, String> records=consumer.poll(Duration.ofSeconds(30));
+            records.forEach(record->System.out.println(
+                    "Key:"+record.key()+"\tValue:"+record.value()+
+                    "\tPartition: "+record.partition()+"\tOffset: "+record.offset()));
+        }
+
+    }
+
+}
+
+
+kafka-consumer-groups --describe --group group-1 --bootstrap-server localhost:9092
+
+kafka-consumer-groups --describe --all-groups --bootstrap-server localhost:9092
+
+package com.jpmc.training.receiver;
+
+import java.time.Duration;
+import java.util.Collections;
+import java.util.List;
+import java.util.Properties;
+
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+
+public class ReceiverWithAutoOffsetReset {
+
+    public static void main(String[] args) {
+        // TODO Auto-generated method stub
+        Properties props=new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "group-4");
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        
+        KafkaConsumer<String, String> consumer=new KafkaConsumer<>(props);
+        List<String> topicList=Collections.singletonList("first-topic");
+        consumer.subscribe(topicList);
+        
+        System.out.println("waiting for messages");
+        
+        while(true) {
+            ConsumerRecords<String, String> records=consumer.poll(Duration.ofSeconds(30));
+            records.forEach(record->System.out.println(
+                    "Key:"+record.key()+"\tValue:"+record.value()+
+                    "\tPartition: "+record.partition()+"\tOffset: "+record.offset()));
+        }
+
+    }
+
+}
+
+
+c
+
+kafka-topics --describe -topic sample-topic --zookeeper localhost:2181
+
+auto.create.topics.enable=false
+
+kafka-server-start c:\kafka_2.12-2.5.0\config\server.properties
+
+kafka-console-producer --topic third-topic --bootstrap-server localhost:9092
+
+
+
+kafka-console-producer --topic third-topic --bootstrap-server localhost:9092
+
+package com.jpmc.training.receiver;
+
+import java.time.Duration;
+import java.util.Collections;
+import java.util.List;
+import java.util.Properties;
+
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.StringDeserializer;
+
+public class KafkaConsumer<String, String> consumer=new KafkaConsumer<>(props);
+    TopicPartition partition=new TopicPartition("first-topic", partitionToConsume);
+    List<TopicPartition> partitionList=Collections.singletonList(partition);
+    consumer.assign(partitionList);{
+public static void main(String[] args) {
+    Properties props=new Properties();
+    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+    props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+    props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+    
+    int partitionToConsume=Integer.parseInt(args[0]);
+    
+    KafkaConsumer<String, String> consumer=new KafkaConsumer<>(props);
+    TopicPartition partition=new TopicPartition("first-topic", partitionToConsume);
+    List<TopicPartition> partitionList=Collections.singletonList(partition);
+    consumer.assign(partitionList);
+    
+    System.out.println("waiting for messages from partition "+partitionToConsume);
+    
+    while(true) {
+        ConsumerRecords<String, String> records=consumer.poll(Duration.ofSeconds(30));
+        records.forEach(record->System.out.println(
+                "Key:"+record.key()+"\tValue:"+record.value()+"\tOffset: "+record.offset()));
+    }
+
+}
+}
+
+
+package com.jpmc.training.receiver;
+
+import java.time.Duration;
+import java.util.Collections;
+import java.util.List;
+import java.util.Properties;
+
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.StringDeserializer;
+
+public class ReceiverFromSpecificPartitionAndOffset {
+public static void main(String[] args) {
+    Properties props=new Properties();
+    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+    props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+    props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+    props.put(ConsumerConfig.GROUP_ID_CONFIG, "group-2");
+    
+    int partitionToConsume=Integer.parseInt(args[0]);
+    
+    KafkaConsumer<String, String> consumer=new KafkaConsumer<>(props);
+    TopicPartition partition=new TopicPartition("first-topic", partitionToConsume);
+    List<TopicPartition> partitionList=Collections.singletonList(partition);
+    consumer.assign(partitionList);
+    consumer.seek(partition, Integer.parseInt(args[1]));
+    
+    System.out.println("waiting for messages from partition "+partitionToConsume);
+    
+    while(true) {
+        ConsumerRecords<String, String> records=consumer.poll(Duration.ofSeconds(30));
+        records.forEach(record->System.out.println(
+                "Key:"+record.key()+"\tValue:"+record.value()+"\tOffset: "+record.offset()));
+    }
+
+}
+}
+
+kafka-consumer-groups --describe --group group-1 --bootstrap-server localhost:9092
+
+kafka-consumer-groups --reset-offsets --group group-2 --shift-by -20 --topic first-topic --bootstrap-server localhost:9092 --execute
+
+package com.jpmc.training.receiver;
+
+import java.time.Duration;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+import java.util.Properties;
+
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.StringDeserializer;
+
+public class ReceiverFromSpecificListOfPartitionsAndOffset {
+public static void main(String[] args) {
+    Properties props=new Properties();
+    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+    props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+    props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+    props.put(ConsumerConfig.GROUP_ID_CONFIG, "group-2");
+    
+    
+    
+    KafkaConsumer<String, String> consumer=new KafkaConsumer<>(props);
+    TopicPartition partitionZero=new TopicPartition("first-topic", 0);
+    TopicPartition partitionOne=new TopicPartition("first-topic", 1);
+    TopicPartition partitionTwo=new TopicPartition("first-topic", 2);
+    
+    List<TopicPartition> partitionList=Arrays.asList(partitionZero,partitionOne,partitionTwo);
+    consumer.assign(partitionList);
+    consumer.seek(partitionZero, 25);
+    consumer.seek(partitionOne, 50);
+    consumer.seek(partitionTwo, 100);
+    
+    //System.out.println("waiting for messages from partition "+partitionToConsume);
+    
+    while(true) {
+        ConsumerRecords<String, String> records=consumer.poll(Duration.ofSeconds(30));
+        records.forEach(record->System.out.println(
+                "Key:"+record.key()+"\tValue:"+record.value()
+                +"\tPartition:"+record.partition()
+                +"\tOffset: "+record.offset()+"\tTime stamp:"+new Date(record.timestamp())));
+    }
+
+}
+}
+
+kafka-consumer-groups --reset-offsets --group group-2 --shift-by -20 --topic first-topic:1,2 --bootstrap-server localhost:9092 --execute
+
+kafka-consumer-groups --reset-offsets --group group-2 --to-offset 100 --topic first-topic:1,2 --bootstrap-server localhost:9092 --execute
+
+kafka-consumer-groups --reset-offsets --group group-2 --to-datetime "2024-01-30T15:00:00.000" --topic first-topic:1,2 --bootstrap-server localhost:9092 --execute
+
+
+
+package com.jpmc.training.receiver;
+
+import java.time.Duration;
+import java.util.Collections;
+import java.util.List;
+import java.util.Properties;
+
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+
+public class ReceiverWithManualCommit {
+
+    public static void main(String[] args) {
+        // TODO Auto-generated method stub
+        Properties props=new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "group-1");
+        //props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        
+        KafkaConsumer<String, String> consumer=new KafkaConsumer<>(props);
+        List<String> topicList=Collections.singletonList("first-topic");
+        consumer.subscribe(topicList);
+        
+        System.out.println("waiting for messages");
+        
+        while(true) {
+            ConsumerRecords<String, String> records=consumer.poll(Duration.ofSeconds(30));
+            records.forEach(record->System.out.println(
+                    "Key:"+record.key()+"\tValue:"+record.value()+"\tPartition: "+record.partition()
+                    +"\tOffset:"+record.offset()));
+        }
+
+    }
+
+}
+
+
+kafka-consumer-groups --describe --group group-1 --bootstrap-server localhost:9092
+
+package com.jpmc.training.receiver;
+
+import java.time.Duration;
+import java.util.Collections;
+import java.util.List;
+import java.util.Properties;
+
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+
+public class ReceiverWithManualCommit {
+
+    public static void main(String[] args) {
+        // TODO Auto-generated method stub
+        Properties props=new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "group-1");
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        
+        KafkaConsumer<String, String> consumer=new KafkaConsumer<>(props);
+        List<String> topicList=Collections.singletonList("first-topic");
+        consumer.subscribe(topicList);
+        
+        System.out.println("waiting for messages");
+        
+        while(true) {
+            ConsumerRecords<String, String> records=consumer.poll(Duration.ofSeconds(30));
+            records.forEach(record->System.out.println(
+                    "Key:"+record.key()+"\tValue:"+record.value()+"\tPartition: "+record.partition()
+                    +"\tOffset:"+record.offset()));
+            //datebase update logic
+            consumer.commitSync();
+        }
+
+    }
+
+}
+
+

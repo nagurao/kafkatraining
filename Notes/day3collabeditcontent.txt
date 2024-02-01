@@ -1,0 +1,448 @@
+
+https://drive.google.com/drive/folders/1DMpty0sJ8EnzcLKbsgmJI6js8GLirHOZ?usp=sharing
+
+package com.jpmc.training.sender;
+
+import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.producer.RecordMetadata;
+
+public class TestCallback implements Callback {
+    private int i;
+    
+
+    public TestCallback(int i) {
+        super();
+        this.i = i;
+    }
+
+
+    @Override
+    public void onCompletion(RecordMetadata rmd, Exception ex) {
+        // TODO Auto-generated method stub
+
+        if(ex==null) {
+            System.out.println("message with value "+i+" published in partition "+
+        rmd.partition()+" at offset "+rmd.offset());
+        }
+    }
+
+}
+
+
+package com.jpmc.training.sender;
+
+import java.util.Properties;
+
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringSerializer;
+
+public class SenderWithCallback {
+public static void main(String[] args) {
+    Properties props=new Properties();
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,"localhost:9092");
+    props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,StringSerializer.class.getName());
+    props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,StringSerializer.class.getName());
+    
+    String topic="first-topic";
+    KafkaProducer<String, String> producer=new KafkaProducer<>(props);
+    for(int i=1;i<=10;i++) {
+        ProducerRecord<String, String> record=
+                new ProducerRecord<>(topic,"This is  test message "+i);
+        producer.send(record,new TestCallback(i));
+    }
+    producer.close();
+    System.out.println("messages sent");
+}
+}
+
+
+content of %KAFKA_HOME%\config\my-connect-file-source.properties
+
+name=local-file-source-test
+connector.class=FileStreamSource
+#number of parallel threads
+tasks.max=1
+file=c:/input/test.txt
+topic=test-topic
+
+
+connect-standalone c:\kafka_2.12-2.5.0\config\connect-standalone.properties c:\kafka_2.12-2.5.0\config\my-connect-file-source.properties
+
+
+kafka-console-consumer --topic test-topic --bootstrap-server localhost:9092 --from-beginning
+
+content of %KAFKA_HOME%\config\my-connect-file-sink.properties
+
+name=local-file-sink-test
+connector.class=FileStreamSink
+tasks.max=1
+file=c:/output/test-out.txt
+topics=test-topic
+
+
+
+connect-standalone c:\kafka_2.12-2.5.0\config\connect-standalone.properties c:\kafka_2.12-2.5.0\config\my-connect-file-source.properties c:\kafka_2.12-2.5.0\config\my-connect-file-sink.properties
+
+my-connect-file-source-etl.properties
+
+name=file-src-etl
+connector.class=FileStreamSource
+#number of parallel threads
+tasks.max=1
+file=c:/input/test.txt
+topic=file-etl-src-topic
+
+
+<dependencies>
+  <!-- https://mvnrepository.com/artifact/org.apache.kafka/kafka-streams -->
+<dependency>
+    <groupId>org.apache.kafka</groupId>
+    <artifactId>kafka-streams</artifactId>
+    <version>2.5.0</version>
+</dependency>
+  
+  </dependencies>
+  
+package com.jpmc.training.streams;
+
+import java.util.Properties;
+
+import org.apache.kafka.common.serialization.Serdes.StringSerde;
+import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.kstream.KStream;
+
+public class FileETLStreamingApp {
+    public static void main(String[] args) {
+        Properties props=new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "file-etl-streaming-app");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, StringSerde.class.getName());
+        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, StringSerde.class.getName());
+        KafkaStreams streams=new KafkaStreams(createTopology(), props);
+        streams.start();
+        System.out.println("streaming started");
+        try {
+            Thread.sleep(10*60*1000);
+        } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        streams.close();
+        System.out.println("streaming stopped");
+    }
+
+    
+    static Topology createTopology() {
+        String inputTopic="file-etl-src-topic";
+        String outputTopic="file-etl-sink-topic";
+        StreamsBuilder builder=new StreamsBuilder();
+        KStream<String, String> inputStream=builder.stream(inputTopic);
+        KStream<String, String> transformedStream= inputStream.mapValues(line->{
+            System.out.println("processing "+line);
+            return line.toUpperCase();
+        });
+        transformedStream.to(outputTopic);
+        return builder.build();
+    }
+}
+
+
+%KAFKA_HOME%/config/my-connect-file-sink-etl.properties
+
+name=file-sink-etl
+connector.class=FileStreamSink
+tasks.max=1
+file=c:/output/upper.txt
+topics=file-etl-sink-topic
+
+connect-standalone c:\kafka_2.12-2.5.0\config\connect-standalone.properties c:\kafka_2.12-2.5.0\config\my-connect-file-source-etl.properties c:\kafka_2.12-2.5.0\config\my-connect-file-sink-etl.properties
+
+kafka-console-consumer --topic file-etl-src-topic --bootstrap-server localhost:9092 --from-beginning
+
+kafka-console-consumer --topic file-etl-sink-topic --bootstrap-server localhost:9092 --from-beginning
+
+rps@12345 is the password for mysql
+
+mysql> create database trainingdb;
+Query OK, 1 row affected (0.create database trainingdb;
+Query OK, 1 row affected (0.00 sec)
+
+mysql> use trainingdb;
+Database changed
+
+
+mysql> create table employee(id integer auto_increment,name varchar(20),designation varchar(20),primary key(id));
+Query OK, 0 rows affected (0.02 sec)
+
+mysql> insert into employee values(1001,"Arvind","Developer");
+Query OK, 1 row affected (0.00 sec)
+
+mysql> insert into employee(name,designation) values("Surya","Accountant");
+Query OK, 1 row affected (0.00 sec)
+
+mysql> insert into employee(name,designation) values("Ramesh","Architect");
+Query OK, 1 row affected (0.00 sec)
+
+mysql> select * from employee;
+
+
+connect-mysql-source-etl.properties
+
+
+name=mysql-source-connector-etl
+connector.class=io.confluent.connect.jdbc.JdbcSourceConnector
+tasks.max=10
+connection.url=jdbc:mysql://localhost:3306/trainingdb?user=root&password=rps@12345
+table.whitelist=employee
+mode=incrementing
+incrementing.column.name=id
+#topic name will be mysql-topic-employee
+topic.prefix=mysql-topic-
+
+
+
+https://docs.confluent.io/kafka-connectors/jdbc/current/source-connector/overview.html
+
+
+
+
+package com.jpmc.training.domain;
+
+public class Employee {
+    private int id;
+    private String name;
+    private String designation;
+    private double salary;
+    
+    public int getId() {
+        return id;
+    }
+    public void setId(int id) {
+        this.id = id;
+    }
+    public String getName() {
+        return name;
+    }
+    public void setName(String name) {
+        this.name = name;
+    }
+    
+    
+    public String getDesignation() {
+        return designation;
+    }
+    public void setDesignation(String designation) {
+        this.designation = designation;
+    }
+    public Employee() {
+        super();
+        // TODO Auto-generated constructor stub
+    }
+    public Employee(int id, String name, String designation) {
+        super();
+        this.id = id;
+        this.name = name;
+        this.designation = designation;
+    }
+    public double getSalary() {
+        return salary;
+    }
+    public void setSalary(double salary) {
+        this.salary = salary;
+    }
+    
+    
+    
+
+}
+
+
+package com.jpmc.training.serde;
+
+import org.apache.kafka.common.serialization.Serializer;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jpmc.training.domain.Employee;
+
+public class EmployeeSerializer implements Serializer<Employee>{
+    private ObjectMapper mapper=new ObjectMapper();
+    @Override
+    public byte[] serialize(String topic, Employee e) {
+        // TODO Auto-generated method stub
+        byte[] arr=null;
+        try {
+            arr=mapper.writeValueAsBytes(e);
+        } catch (JsonProcessingException e1) {
+            // TODO Auto-generated catch block
+            e1.printStackTrace();
+        }
+        System.out.println("serialized to "+new String(arr));
+        return arr;
+    }
+
+}
+
+
+package com.jpmc.training.serde;
+
+import java.io.IOException;
+
+import org.apache.kafka.common.serialization.Deserializer;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jpmc.training.domain.Employee;
+
+public class EmployeeDeserializer implements Deserializer<Employee> {
+    private ObjectMapper mapper=new ObjectMapper();
+    @Override
+    public Employee deserialize(String topic, byte[] array) {
+        // TODO Auto-generated method stub
+        Employee employee=null;
+        try {
+            employee=mapper.readValue(array, Employee.class);
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        return employee;
+    }
+
+}
+
+
+
+
+package com.jpmc.training.serde;
+
+import com.jpmc.training.domain.Employee;
+
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serializer;
+
+public class EmployeeSerde implements Serde<Employee> {
+
+    @Override
+    public Deserializer<Employee> deserializer() {
+        // TODO Auto-generated method stub
+        return new EmployeeDeserializer();
+    }
+
+    @Override
+    public Serializer<Employee> serializer() {
+        // TODO Auto-generated method stub
+        return new EmployeeSerializer();
+    }
+
+}
+
+
+package com.jpmc.training.streams;
+
+import java.util.Properties;
+
+import org.apache.kafka.common.serialization.Serdes.StringSerde;
+import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.kstream.KStream;
+
+import com.jpmc.training.domain.Employee;
+import com.jpmc.training.serde.EmployeeSerde;
+
+public class MysqlToCassandraETLApp {
+    public static void main(String[] args) {
+        Properties props=new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "mysql-cassandra-etl-streaming-app");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, StringSerde.class.getName());
+        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, EmployeeSerde.class.getName());
+        KafkaStreams streams=new KafkaStreams(createTopology(), props);
+        streams.start();
+        System.out.println("streaming started");
+        try {
+            Thread.sleep(10*60*1000);
+        } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        streams.close();
+        System.out.println("streaming stopped");
+    }
+
+    
+    static Topology createTopology() {
+        String inputTopic="mysql-topic-employee";
+        String outputTopic="cassandra-topic-employee";
+        StreamsBuilder builder=new StreamsBuilder();
+        KStream<String, Employee> inputStream=builder.stream(inputTopic);
+        KStream<String, Employee> transformedStream= inputStream.mapValues(emp->{
+            System.out.println("processing employee with id  "+emp.getId());
+            String designation=emp.getDesignation();
+            Employee emp1=new Employee(emp.getId(), emp.getName(), designation);
+            double salary=30000;
+            if(designation.equals("Developer")) {
+                salary=45000;
+            }
+            else if(designation.equals("Accountant")) {
+                salary=35000;
+            }
+            else if(designation.equals("Architect")) {
+                salary=70000;
+            }
+            emp1.setSalary(salary);
+            return emp1;
+        });
+        transformedStream.to(outputTopic);
+        return builder.build();
+    }
+}
+
+
+
+cassandra
+
+C:\apache-cassandra-3.11.6\bin>path=c:\Python27;%path%
+
+C:\apache-cassandra-3.11.6\bin>cqlsh
+
+cqlsh> create keyspace test_keyspace with replication={'class':'SimpleStrategy','replication_factor':1};
+cqlsh> use test_keyspace;
+cqlsh:test_keyspace> create table emp(emp_id int primary key,emp_name text,designation text,salary double);
+cqlsh:test_keyspace> describe tables;
+
+
+%KAFKA_HOME%\config\connect-cassandra-sink-etl.properties
+
+name=cassandra-sink-etl
+connector.class=com.datamountaineer.streamreactor.connect.cassandra.sink.CassandraSinkConnector
+tasks.max=1
+topics=cassandra-topic-employee
+connect.cassandra.kcql=INSERT INTO emp SELECT id as emp_id,name as emp_name,designation,salary FROM cassandra-topic-employee
+connect.cassandra.port=9042
+connect.cassandra.key.space=test_keyspace
+connect.cassandra.contact.points=localhost
+connect.cassandra.username=cassandra
+connect.cassandra.password=cassandra
+
+
+connect-standalone c:\kafka_2.12-2.5.0\config\connect-standalone.properties c:\kafka_2.12-2.5.0\config\connect-mysql-source-etl.properties c:\kafka_2.12-2.5.0\config\connect-cassandra-sink-etl.properties
+
+
+cqlsh:test_keyspace> select * from emp;
+
+ 
+ mysql> use trainingdb;
+ mysql>insert into employee(name,designation) values("Arun","Accountant");
+ 
+kafka-console-consumer --topic mysql-topic-employee --bootstrap-server localhost:9092 --from-beginning
+
+kafka-console-consumer --topic cassandra-topic-employee --bootstrap-server localhost:9092 --from-beginning
+

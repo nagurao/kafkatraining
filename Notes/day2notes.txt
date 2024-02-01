@@ -1,0 +1,146 @@
+The default deserializer used by kafka-console-consumer is StringDeserializer.
+This can be modified with --value-deserializer option.
+
+
+
+Partitioning need not be done with key alone.
+We can partition based on the value also.
+
+
+While altering a topic,
+
+the number of partitions can only be increased but can't be decreased.
+the replication factor can't be modified.
+
+
+Designation		Partition
+
+Developer		0
+Accountant		1
+Any other		2
+
+
+Offset:
+
+Each message in a partition is assigned a unique sequential id called offset.
+The offset starts from 0.
+
+Current-Offset:
+
+The next offset which will be delivered to a consumer group.
+Current offset is maintained for each consumer group separately.
+
+GROUP           TOPIC         PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             CONSUMER-ID     HOST            CLIENT-ID
+group-1         first-topic     1          282             282            0		   -		  -
+
+
+For consumer group group-1, the next offset from partition 1 will be delivered  is 282.
+This is the current offset.
+
+
+log-end-offset:
+
+The next offset to which message will be delivered in the partition.
+log-end-offset value will be common for all consumer groups.
+
+
+LAG is calculated as log_end_offset - current_offset.
+It denotes the number of messages which are yet to consumed by the consumer group.
+
+When a consumer group is newly registered, it assumes that its current offset is same as the log-end-offset.
+For an existing group, the current offset is only till how much it has consumed.
+
+If the newly registered group should consume all the old messages, the following property should be set.
+
+ConsumerConfig.AUTO_OFFSET_RESET_CONFIG--------------earliest.
+
+The default value of this property is "latest".
+
+
+num.partitions in server config file:
+
+By default, auto.create.topics.enable property is true in kafka.
+ie when a topic is not available, if you try to publish/consume to/from the topic, kafka will automatically
+create the topic.
+When kafka automatically creates a topic, the default number of partitions will be 1.
+This is configured in num.partitions property.
+
+Kafka is not designed for more number of topics with less messages.
+It is designed for few number of topic with large volume of messages.
+
+Kafka is not designed for few messages with larger size.
+It is designed for large volume of messages of smaller size(<=1mb).
+
+
+By default, based on the number of consumers in a consumer group, kafka allocates partitions to the consumers.
+There is no chance as a developer , you can assign a partition to a consumer directly.
+
+In few circumstances, you want to execute different business logics at the consumer side for each 
+partition.
+
+If you want to assign a consumer directly to a partition, it need not be part of a consumer group.
+
+
+consumer.assign(listOfTopicPartitions)--------assigns parition(s) to a consumer directly.
+
+In case, you want to track whether the consumer group has consumed a message even if the partition is 
+directly assinged to a consumer, you can make that consumer to be part of the consumer group to update
+the current offset.
+
+To make a consumer to start consuming from a specific offset of a partition, 
+consumer.seek() method is used.
+But this is allowed only along with consumer.assign(listOfPartitions).
+
+When a consumer is assigned a partition and if it is part of a consumer group,seek() method starts consuming messages from a specific offset if it is less than the current offset.
+
+If it is more than the log-end-offset, it starts consuming only the latest messages.
+
+kafka-consumer-groups --reset-offsets --group group-2 --shift-by -20 --topic first-topic --bootstrap-server localhost:9092 --execute
+
+Using --reset-offsets, the current offset can be shifted to older or a later value.
+
+if --shift-by is -ve, it shifts to older offset and if it is +ve, it shifts to later offset.
+If the later offset value is more than the log-end-offset, the new value will be log-end-offset itself.
+
+
+
+Committing the offset:
+
+When a consumer of a consumer group consumes a message, the corresponding is committed at the server side so that the same message will not be redelivered to the same consumer group.
+
+Two types of commit:
+
+1. Auto Commit
+2. Manual Commit
+
+Auto Commit:
+
+When a consumer of a consumer group has received the message in the recent poll, the kafka server automatically commits after 5 seconds of consuming the message if there is no exception thrown by the consumer.
+This default commit interval can be modified using the property
+auto.commit.interval.ms.
+
+This works only when auto commit is enabled.
+
+By default, auto commit is enabled.
+
+To disable auto commit, enable.auto.commit property should be made to false.
+
+Auto commit works as cron job with a period set through the auto.commit.interval.ms property(default value:5000). If the consumer crashes within this 5 seconds, then after a restart  or rebalance of the consumer, the position of all partitions owned
+by the consumer will be reset to the last committed offset.
+
+
+Manual Commit:
+In manual commit, the consumer should explicitly inform the server that the message can be committed.
+Otherwise, the server treats the message as unconsumed.
+Manual commit is enabled by setting enable.auto.commit=false.
+For a specific consumer , ConsumerConfig.AUTO_COMMIT_CONFIG should be set to false.
+
+
+
+
+
+
+
+
+
+
