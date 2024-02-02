@@ -1,0 +1,125 @@
+KafkaAvroConsoleConsumer internally uses KakfaAvroDeserializer.
+
+Rest Proxy(kafka-rest) exposes restful webservices to interfact with kafka.
+
+Rest Proxy runs at port 8082.
+
+KSql Server provides a sql based interface to interact with kafka.
+
+
+ksql streams support csv,json and avro formats.
+
+Control Center:
+Provides a web based ui to monitor and perform some simple administration tasks with kafka.
+
+By default , it runs at port 9021.
+
+
+Security:
+
+Authentication------------who you are
+Authorization-------------what rights you have
+Data Confidentiality------ensures that the data is not visible to any one other than the sender & receiver
+Data Integrity------------ensures that the data sent is the data received.
+
+Authentication & Authorization is achieved with SASL (Simple Authentication Security Layer).
+Data Confidentiality & Integrity is achieved with SSL(Secure Socket Layer).
+SASL is based on the java api JAAS(Java Authentication & Authorization Service)
+
+
+setting up SASL:
+
+1. create a copy of %KAFKA_HOME%\config\server.properties and rename it as server-secure.properties
+2. Add the following content to server-secure.properties
+
+listeners=SASL_PLAINTEXT://localhost:9092
+security.inter.broker.protocol=SASL_PLAINTEXT
+sasl.mechanism.inter.broker.protocol=PLAIN
+sasl.enabled.mechanisms=PLAIN
+
+3. create a file called server-jaas.conf under %KAFKA_HOME%\config directory and add the following content to it.
+KafkaServer {
+   org.apache.kafka.common.security.plain.PlainLoginModule required
+   username="admin"
+   password="admin-secret"
+   user_admin="admin-secret"
+   user_alice="alice-secret"
+   user_user1="pass1";
+};
+
+4. shutdown any zookeeper or kafka server instances if they are running and clear the /tmp directory.
+
+5. start the zookeeper.
+open a new command window and run the following command.
+zookeeper-server-start  c:\kafka_2.12-2.5.0\config\zookeeper.properties
+
+6. start the kafka server with the following commands in a new command window.
+
+set KAFKA_OPTS=-Djava.security.auth.login.config=%KAFKA_HOME%/config/server-jaas.conf
+
+kafka-server-start c:\kafka_2.12-2.5.0\config\server-secure.properties
+
+
+The KAFKA_OPTS is used to specify additional jvm parameters which will be used by kafka specific tools/commands
+like kafka-server-start,kafka-console-producer,kafka-console-consumer and etc.
+
+-Djava.security.auth.login.config=%KAFKA_HOME%/config/server-jaas.conf 
+adds a system property called java.security.auth.login.config whose value is %KAFKA_HOME%/config/server-jaas.conf.
+
+This ensures that the SASL uses the jaas config file %KAFKA_HOME%/config/server-jaas.conf.
+
+7. create a topic called test-security-topic.
+
+kafka-topics --create --topic test-security-topic --partitions 3 --replication-factor 1 --zookeeper localhost:2181
+
+8. create the directory c:\securekafkaproducer and create the following files under this directory.
+
+c:\securekafkaproducer\client-jaas.conf
+
+KafkaClient {
+  org.apache.kafka.common.security.plain.PlainLoginModule required
+  username="alice"
+  password="alice-secret";
+};
+
+c:\securekafkaproducer\client.properties
+
+security.protocol=SASL_PLAINTEXT
+sasl.mechanism=PLAIN
+
+        
+9.start kafka-console-producer with these commands
+        
+set KAFKA_OPTS=-Djava.security.auth.login.config=c:/securekafkaproducer/client-jaas.conf
+
+kafka-console-producer --topic test-security-topic --bootstrap-server localhost:9092 --producer.config c:\securekafkaproducer\client.properties
+
+
+10. create the directory c:\securekafkaconsumer and create the following files under this directory.
+
+c:\securekafkaconsumer\client-jaas.conf
+
+KafkaClient {
+  org.apache.kafka.common.security.plain.PlainLoginModule required
+  username="user1"
+  password="pass1";
+};
+
+c:\securekafkaconsumer\client.properties
+
+security.protocol=SASL_PLAINTEXT
+sasl.mechanism=PLAIN
+
+11. start the kafka-console-consumer using the following commands.
+
+set KAFKA_OPTS=-Djava.security.auth.login.config=c:/securekafkaconsumer/client-jaas.conf
+
+kafka-console-consumer --topic test-security-topic --bootstrap-server localhost:9092 --consumer.config c:\securekafkaconsumer\client.properties --from-beginning
+
+
+Using kafka-acls utility , topicwise permission can be provided to users.
+
+
+will resume at 3:40 pm.
+
+

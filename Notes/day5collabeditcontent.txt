@@ -1,0 +1,367 @@
+./kafka-console-consumer --topic test-avro-topic --bootstrap-server localhost:9092 --from-beginning
+
+./kafka-avro-console-consumer --topic test-avro-topic --bootstrap-server localhost:9092 --from-beginning
+
+
+package com.jpmc.training.avrosender;
+
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.util.Properties;
+
+import org.apache.avro.Schema;
+import org.apache.avro.Schema.Parser;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringSerializer;
+
+import io.confluent.kafka.serializers.KafkaAvroSerializer;
+
+public class SimpleAvroSender {
+public static void main(String[] args) {
+    byte[] array=new byte[1024];
+    try {
+        FileInputStream fin=new FileInputStream("customer.avsc");
+        fin.read(array);
+        fin.close();
+    } catch (FileNotFoundException e) {
+        // TODO Auto-generated catch block
+        e.printStackTrace();
+    } catch (IOException e) {
+        // TODO Auto-generated catch block
+        e.printStackTrace();
+    }
+    Properties props=new Properties();
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,"localhost:9092");
+    props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,StringSerializer.class.getName());
+    props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,KafkaAvroSerializer.class.getName());
+    props.put("schema.registry.url","http://localhost:8081");
+    
+    KafkaProducer<String, GenericRecord> producer=new KafkaProducer<>(props);
+    Parser parser=new Parser();
+    Schema schema=parser.parse(new String(array));
+    GenericRecord genericRecord=new GenericData.Record(schema);
+    genericRecord.put("id",1001);
+    genericRecord.put("name","Surya");
+    genericRecord.put("email","surya@gmail.com");
+    String topic="test-avro-topic";
+    ProducerRecord<String, GenericRecord> record=new ProducerRecord<>(topic,"test-key",genericRecord);
+    producer.send(record);
+    System.out.println("message sent");
+    producer.close();
+}
+}
+
+export CLASSPATH=/home/kafka/Desktop/confluent-5.1.0/share/java/confluent-common/*:/home/kafka/Desktop/confluent-5.1.0/share//java/kafka-serde-tools/*
+
+
+./kafka-console-consumer --value-deserializer io.confluent.kafka.serializers.KafkaAvroDeserializer --formatter io.confluent.kafka.formatter.AvroMessageFormatter --property schema.registry.url=http://localhost:8081 --topic test-avro-topic --bootstrap-server localhost:9092 --from-beginning
+
+
+package com.jpmc.training.avrosender;
+
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.util.Properties;
+
+import org.apache.avro.Schema;
+import org.apache.avro.Schema.Parser;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringSerializer;
+
+import io.confluent.kafka.serializers.KafkaAvroSerializer;
+
+public class SimpleAvroSender {
+public static void main(String[] args) {
+    byte[] array=new byte[1024];
+    try {
+        FileInputStream fin=new FileInputStream("customer.avsc");
+        fin.read(array);
+        fin.close();
+    } catch (FileNotFoundException e) {
+        // TODO Auto-generated catch block
+        e.printStackTrace();
+    } catch (IOException e) {
+        // TODO Auto-generated catch block
+        e.printStackTrace();
+    }
+    Properties props=new Properties();
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG,"localhost:9092");
+    props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,StringSerializer.class.getName());
+    props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,KafkaAvroSerializer.class.getName());
+    props.put("schema.registry.url","http://localhost:8081");
+    
+    KafkaProducer<String, GenericRecord> producer=new KafkaProducer<>(props);
+    Parser parser=new Parser();
+    Schema schema=parser.parse(new String(array));
+    GenericRecord genericRecord=new GenericData.Record(schema);
+    String topic="test-avro-topic";
+    for(int i=1001;i<=1010;i++) {
+    genericRecord.put("id",i);
+    genericRecord.put("name","Name "+i);
+    genericRecord.put("email","test"+i+"@gmail.com");
+    
+    ProducerRecord<String, GenericRecord> record=new ProducerRecord<>(topic,"test-key",genericRecord);
+    producer.send(record);
+    }
+    System.out.println("message sent");
+    producer.close();
+}
+}
+
+
+curl -X GET http://localhost:8081/subjects
+
+
+curl -X GET http://localhost:8081/subjects/test-avro-topic-value/versions
+
+curl -X GET http://localhost:8081/subjects/test-avro-topic-value/versions/1
+
+
+curl -X GET http://localhost:8081/schemas/ids/21
+
+./kafka-avro-console-consumer --topic test-avro-topic --bootstrap-server localhost:9092 --property print.schema.ids=true --property schema.id.separator=: --from-beginning
+
+
+./kafka-topics --create --topic test-rest-topic --partitions 3 --replication-factor 1 --zookeeper localhost:2181
+
+curl -X GET http://localhost:8082/topics
+
+curl -X GET http://localhost:8082/topics/test-rest-topic
+
+
+curl -X GET http://localhost:8082/topics/test-rest-topic/partitions
+
+
+curl -X GET http://localhost:8082/topics/test-rest-topic/partitions/1
+
+
+curl -X POST -H "Content-Type: application/vnd.kafka.json.v2+json" --data '{"records":[{"value":{"empId":1001,"name":"Arvind","designation":"Developer"}}]}' http://localhost:8082/topics/test-rest-topic
+
+
+./kafka-console-consumer --topic test-rest-topic --bootstrap-server localhost:9092 --from-beginning
+
+
+./ksql
+
+
+./kafka-topics --create --topic test-ksql-topic --partitions 4 --replication-factor 1 --zookeeper localhost:2181
+
+
+ksql> list topics;
+
+
+
+ksql> create stream emp_stream(id int,name varchar,designation varchar) with (kafka_topic='test-ksql-topic',value_format='json');
+
+
+./kafka-console-producer --topic test-ksql-topic --broker-list localhost:9092
+
+{"id":2001,"name":"Arvind","designation":"Developer"}
+{"id":2002,"name":"Deva","designation":"Developer"}
+{"id":2003,"name":"Surya","designation":"Accountant"}
+{"id":2004,"name":"Ramesh","designation":"Developer"}
+{"id":2005,"name":"Amar","designation":"Accountant"}
+{"id":2006,"name":"Sasi","designation":"Architect"}
+
+
+ksql> select * from emp_stream;
+
+ksql> set 'auto.offset.reset'='earliest';
+
+ksql> select * from emp_stream;
+
+ksql> describe emp_stream;
+
+ksql> select id,name,designation from emp_stream;
+
+ksql> select designation,count(*) from emp_stream group by designation;
+ksql> create stream developers as select * from emp_stream where designation='Developer';
+
+kafka@localhost bin]$ ./kafka-console-consumer --topic DEVELOPERS --bootstrap-server localhost:9092 --from-beginning
+
+ksql> print 'test-rest-topic' from beginning;
+
+
+ksql> print 'test-rest-topic' from beginning;
+
+
+./kafka-topics --create --topic address-topic --partitions 4 --replication-factor 1 --zookeeper localhost:2181
+
+ksql> create stream address_stream(id int,location varchar,city varchar) with (kafka_topic='address-topic',value_format='json');
+
+./kafka-console-producer --topic address-topic  --broker-list localhost:9092
+
+
+{"id":2001,"location":"Hebbal","city":"Bangalore"}
+{"id":2002,"location":"Panjakutta","city":"Hyderabad"}
+{"id":2003,"location":"Bandra East","city":"Mumbai"}
+
+ksql> select e.id as emp_id,e.name,e.designation,a.location,a.city from emp_stream e inner join address_stream a within 7 days on e.id=a.id;
+
+
+http://localhost:9021
+
+Add the following properties to server-secure.properties
+
+listeners=SASL_PLAINTEXT://localhost:9092
+security.inter.broker.protocol=SASL_PLAINTEXT
+sasl.mechanism.inter.broker.protocol=PLAIN
+sasl.enabled.mechanisms=PLAIN
+
+
+%KAFKA_HOME%\config\server-jaas.conf
+
+KafkaServer {
+   org.apache.kafka.common.security.plain.PlainLoginModule required
+   username="admin"
+   password="admin-secret"
+   user_admin="admin-secret"
+   user_alice="alice-secret"
+   user_user1="pass1";
+};
+
+zookeeper-server-start  c:\kafka_2.12-2.5.0\config\zookeeper.properties
+
+set KAFKA_OPTS=-Djava.security.auth.login.config=%KAFKA_HOME%/config/server-jaas.conf
+
+kafka-server-start c:\kafka_2.12-2.5.0\config\server-secure.properties
+
+kafka-topics --create --topic test-security-topic --partitions 3 --replication-factor 1 --zookeeper localhost:2181
+
+
+kafka-console-producer --topic test-security-topic --bootstrap-server localhost:9092
+
+
+c:\securekafkaproducer\client-jaas.conf
+
+KafkaClient {
+  org.apache.kafka.common.security.plain.PlainLoginModule required
+  username="alice"
+  password="alice-secret";
+};
+
+c:\securekafkaproducer\client.properties
+
+security.protocol=SASL_PLAINTEXT
+sasl.mechanism=PLAIN
+
+        
+start kafka-console-producer with these commands
+        
+set KAFKA_OPTS=-Djava.security.auth.login.config=c:/securekafkaproducer/client-jaas.conf
+
+kafka-console-producer --topic test-security-topic --bootstrap-server localhost:9092 --producer.config c:\securekafkaproducer\client.properties
+
+c:\securekafkaconsumer\client-jaas.conf
+
+KafkaClient {
+  org.apache.kafka.common.security.plain.PlainLoginModule required
+  username="user1"
+  password="pass1";
+};
+
+c:\securekafkaconsumer\client.properties
+
+security.protocol=SASL_PLAINTEXT
+sasl.mechanism=PLAIN
+
+
+
+start the kafka console consumer with the following commands
+
+set KAFKA_OPTS=-Djava.security.auth.login.config=c:/securekafkaconsumer/client-jaas.conf
+
+kafka-console-consumer --topic test-security-topic --bootstrap-server localhost:9092 --consumer.config c:\securekafkaconsumer\client.properties --from-beginning
+
+add the folowing lines to server-secure.properties
+authorizer.class.name=kafka.security.auth.SimpleAclAuthorizer
+super.users=User:admin
+zookeeper.set.acl=false
+
+
+restart zookeeper
+restart kafka server
+run the following command from command line.
+
+zookeeper-server-start  c:\kafka_2.12-2.5.0\config\zookeeper.properties
+
+
+kafka-acls --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:alice --producer --topic test-security-topic
+
+kafka-acls --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:user1 --consumer --topic test-security-topic --group group-1
+
+
+keytool -keystore c:\sslkeys\server.keystore.jks -alias localhost -validity 365 -genkey -keyalg RSA
+
+keytool -list -v -keystore c:\sslkeys\server.keystore.jks
+
+path=C:\openssl\bin;%path%  
+
+openssl req -config C:\openssl\openssl.cnf -new -x509 -keyout c:/cakeys/ca-key -out c:/cakeys/ca-cert -days 365
+
+keytool -keystore c:\sslkeys\server.keystore.jks -alias localhost -certreq -file c:\sslkeys\cert-req
+
+openssl x509 -req -CA c:\cakeys\ca-cert -CAkey c:\cakeys\ca-key -in c:\sslkeys\cert-req -out c:\sslkeys\cert-signed -days 365 -CAcreateserial -passin pass:capassword
+
+keytool -keystore c:\sslkeys\server.keystore.jks -alias CARoot -import -file c:\cakeys\ca-cert
+
+keytool -keystore c:\sslkeys\server.keystore.jks -alias localhost -import -file c:\sslkeys\cert-signed
+
+keytool -keystore c:\servertruststore\server.truststore.jks -alias CARoot -import -file c:\cakeys\ca-cert
+
+password: password
+
+keytool -keystore c:\clienttruststore\client.truststore.jks -alias CARoot -import -file c:\cakeys\ca-cert
+
+password: password
+
+Now both kafka server and kafka client can trust the certificate authority's certificate (any certificate signed by 
+the this certificate authority)
+
+
+Add the following lines at the end of server-ssl.properties
+
+ssl.endpoint.identification.algorithm=
+ssl.keystore.location=C:/sslkeys/server.keystore.jks
+ssl.keystore.password=password
+ssl.key.password=password
+ssl.truststore.location=C:/servertruststore/server.truststore.jks
+ssl.truststore.password=password
+listeners=PLAINTEXT://localhost:9092,SSL://localhost:9093
+
+zookeeper-server-start c:\kafka_2.12-2.5.0\config\zookeeper.properties
+
+kafka-server-start c:\kafka_2.12-2.5.0\config\server-ssl.properties
+
+c:\sslclient\client.properties
+
+security.protocol=SSL
+ssl.truststore.location=C:/clienttruststore/client.truststore.jks
+ssl.truststore.password=password
+ssl.endpoint.identification.algorithm=
+
+
+kafka-topics --create --topic test-ssl-topic --partitions 3 --replication-factor 1 --zookeeper localhost:2181
+
+kafka-console-producer --topic test-ssl-topic --bootstrap-server localhost:9093 --producer.config c:\sslclient\client.properties
+
+kafka-console-consumer --topic test-ssl-topic --bootstrap-server localhost:9093 --consumer.config c:\sslclient\client.properties
+
+
+
+https://survey.zohopublic.com/zs/LlD4oy
+
+
+periasamy.subramanian@gmail.com
+9880372634
+
